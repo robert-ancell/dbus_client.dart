@@ -6,31 +6,37 @@ import 'dbus_message.dart';
 import 'dbus_value.dart';
 
 /// Decodes DBus messages from binary data.
-class DBusReadBuffer extends DBusBuffer {
-  /// Data in the buffer.
-  final _data = <int>[];
+class DBusDecoder extends DBusBuffer {
+  /// Stream of messages received.
+  final messages = StreamController<DBusMessage>();
 
-  /// Read position.
-  int readOffset = 0;
+  /// Unused data
+  var _buffer = <int>[];
 
-  /// Number of bytes remaining in the buffer.
-  int get remaining {
-    return _data.length - readOffset;
+  /// True when have received authorization messages.
+  var _authorized = false;
+
+  /// Creates a new reader using [stream].
+  DBusDecoder(Stream<Uint8List> stream) {
+    // FIXME(robert-ancell): handle onError, onDone.
+    stream.listen(_onData);
   }
 
-  /// Add bytes to the buffer.
-  void writeBytes(Iterable<int> value) {
-    _data.addAll(value);
+  /// Process received data.
+  void _onData(UintList data) {
+    _buffer.addAll(data);
+
+
   }
 
   /// Read a single byte from the buffer.
   int readByte() {
     readOffset++;
-    return _data[readOffset - 1];
+    return _buffer[readOffset - 1];
   }
 
   /// Reads [length] bytes from the buffer.
-  ByteBuffer readBytes(int length) {
+  Future<ByteBuffer> readBytes(int length) async {
     var bytes = Uint8List(length);
     for (var i = 0; i < length; i++) {
       bytes[i] = readByte();
@@ -39,10 +45,9 @@ class DBusReadBuffer extends DBusBuffer {
   }
 
   /// Reads a single line of UTF-8 text (terminated with CR LF) from the buffer.
-  /// Retutns null if no line available.
-  String readLine() {
-    for (var i = readOffset; i < _data.length - 1; i++) {
-      if (_data[i] == 13 /* '\r' */ && _data[i + 1] == 10 /* '\n' */) {
+  Future<String> readLine() async {
+    for (var i = readOffset; i < data.length - 1; i++) {
+      if (_buffer[i] == 13 /* '\r' */ && _buffer[i + 1] == 10 /* '\n' */) {
         var bytes = List<int>(i - readOffset);
         for (var j = readOffset; j < i; j++) {
           bytes[j] = readByte();
@@ -136,123 +141,100 @@ class DBusReadBuffer extends DBusBuffer {
   }
 
   /// Reads a 16 bit signed integer from the buffer.
-  /// Assumes that there is sufficient data in the buffer.
-  int readInt16() {
+  Future<int> readInt16() async {
     return ByteData.view(readBytes(2)).getInt16(0, Endian.little);
   }
 
   /// Reads a 16 bit unsigned integer from the buffer.
-  /// Assumes that there is sufficient data in the buffer.
-  int readUint16() {
+  Future<int> readUint16() async {
     return ByteData.view(readBytes(2)).getUint16(0, Endian.little);
   }
 
   /// Reads a 32 bit signed integer from the buffer.
-  /// Assumes that there is sufficient data in the buffer.
-  int readInt32() {
+  Future<int> readInt32() async {
     return ByteData.view(readBytes(4)).getInt32(0, Endian.little);
   }
 
   /// Reads a 32 bit unsigned integer from the buffer.
-  /// Assumes that there is sufficient data in the buffer.
-  int readUint32() {
+  Future<int> readUint32() async {
     return ByteData.view(readBytes(4)).getUint32(0, Endian.little);
   }
 
   /// Reads a 64 bit signed integer from the buffer.
   /// Assumes that there is sufficient data in the buffer.
-  int readInt64() {
+  Future<int> readInt64() async {
     return ByteData.view(readBytes(8)).getInt64(0, Endian.little);
   }
 
   /// Reads a 64 bit unsigned integer from the buffer.
   /// Assumes that there is sufficient data in the buffer.
-  int readUint64() {
+  Future<int> readUint64() async {
     return ByteData.view(readBytes(8)).getUint64(0, Endian.little);
   }
 
   /// Reads a 64 bit floating point number from the buffer.
   /// Assumes that there is sufficient data in the buffer.
-  double readFloat64() {
+  Future<double> readFloat64() async {
     return ByteData.view(readBytes(8)).getFloat64(0, Endian.little);
   }
 
-  /// Reads a [DBusByte] from the buffer or returns null if not enough data.
-  DBusByte readDBusByte() {
-    if (remaining < 1) {
-      return null;
-    }
-    return DBusByte(readByte());
+  /// Reads a [DBusByte] from the buffer.
+  Future<DBusByte> readDBusByte() async {
+    return DBusByte(await readByte());
   }
 
-  /// Reads a [DBusBoolean] from the buffer or returns null if not enough data.
-  DBusBoolean readDBusBoolean() {
-    if (!align(BOOLEAN_ALIGNMENT) || remaining < 4) {
-      return null;
-    }
-    return DBusBoolean(readUint32() != 0);
+  /// Reads a [DBusBoolean] from the buffer.
+  Future<DBusBoolean> readDBusBoolean() async {
+    await align(BOOLEAN_ALIGNMENT);
+    return DBusBoolean(await readUint32() != 0);
   }
 
-  /// Reads a [DBusInt16] from the buffer or returns null if not enough data.
-  DBusInt16 readDBusInt16() {
-    if (!align(INT16_ALIGNMENT) || remaining < 2) {
-      return null;
-    }
-    return DBusInt16(readInt16());
+  /// Reads a [DBusInt16] from the buffer.
+  Future<DBusInt16> readDBusInt16() async {
+    await align(INT16_ALIGNMENT);
+    return DBusInt16(await readInt16());
   }
 
-  /// Reads a [DBusUint16] from the buffer or returns null if not enough data.
-  DBusUint16 readDBusUint16() {
-    if (!align(UINT16_ALIGNMENT) || remaining < 2) {
-      return null;
-    }
-    return DBusUint16(readUint16());
+  /// Reads a [DBusUint16] from the buffer.
+  Future<DBusUint16> readDBusUint16() async {
+    await align(UINT16_ALIGNMENT);
+    return DBusUint16(await readUint16());
   }
 
-  /// Reads a [DBusInt32] from the buffer or returns null if not enough data.
-  DBusInt32 readDBusInt32() {
-    if (!align(INT32_ALIGNMENT) || remaining < 4) {
-      return null;
-    }
-    return DBusInt32(readInt32());
+  /// Reads a [DBusInt32] from the buffer.
+  Future<DBusInt32> readDBusInt32() async {
+    await align(INT32_ALIGNMENT);
+    return DBusInt32(await readInt32());
   }
 
-  /// Reads a [DBusUint32] from the buffer or returns null if not enough data.
-  DBusUint32 readDBusUint32() {
-    if (!align(UINT32_ALIGNMENT) || remaining < 4) {
-      return null;
-    }
-    return DBusUint32(readUint32());
+  /// Reads a [DBusUint32] from the buffer.
+  Future<DBusUint32> readDBusUint32() async {
+    await align(UINT32_ALIGNMENT);
+    return DBusUint32(await readUint32());
   }
 
-  /// Reads a [DBusInt64] from the buffer or returns null if not enough data.
-  DBusInt64 readDBusInt64() {
-    if (!align(INT64_ALIGNMENT) || remaining < 8) {
-      return null;
-    }
-    return DBusInt64(readInt64());
+  /// Reads a [DBusInt64] from the buffer.
+  Future<DBusInt64> readDBusInt64() async {
+    await align(INT64_ALIGNMENT)l
+    return DBusInt64(await readInt64());
   }
 
-  /// Reads a [DBusUint64] from the buffer or returns null if not enough data.
-  DBusUint64 readDBusUint64() {
-    if (!align(UINT64_ALIGNMENT) || remaining < 8) {
-      return null;
-    }
-    return DBusUint64(readUint64());
+  /// Reads a [DBusUint64] from the buffer.
+  Future<DBusUint64> readDBusUint64() async {
+    await align(UINT64_ALIGNMENT);
+    return DBusUint64(await readUint64());
   }
 
-  /// Reads a [DBusDouble] from the buffer or returns null if not enough data.
-  DBusDouble readDBusDouble() {
-    if (!align(DOUBLE_ALIGNMENT) || remaining < 8) {
-      return null;
-    }
-    return DBusDouble(readFloat64());
+  /// Reads a [DBusDouble] from the buffer.
+  Future<DBusDouble> readDBusDouble() async {
+    await align(DOUBLE_ALIGNMENT);
+    return DBusDouble(await readFloat64());
   }
 
-  /// Reads a [DBusString] from the buffer or returns null if not enough data.
-  DBusString readDBusString() {
-    var length = readDBusUint32();
-    if (length == null || remaining < (length.value + 1)) {
+  /// Reads a [DBusString] from the buffer.
+  Future<DBusString> readDBusString() async {
+    var length = await readDBusUint32();
+    if (remaining < (length.value + 1)) {
       return null;
     }
 
@@ -260,26 +242,20 @@ class DBusReadBuffer extends DBusBuffer {
     for (var i = 0; i < length.value; i++) {
       values.add(readByte());
     }
-    readByte(); // Trailing nul.
+    await readByte(); // Trailing nul.
 
     return DBusString(utf8.decode(values));
   }
 
-  /// Reads a [DBusObjectPath] from the buffer or returns null if not enough data.
-  DBusObjectPath readDBusObjectPath() {
-    var value = readDBusString();
-    if (value == null) {
-      return null;
-    }
-    return DBusObjectPath(value.value);
+  /// Reads a [DBusObjectPath] from the buffer.
+  Future<DBusObjectPath> readDBusObjectPath() async {
+    var string = await readDBusString();
+    return DBusObjectPath(string.value);
   }
 
-  /// Reads a [DBusSignature] from the buffer or returns null if not enough data.
-  DBusSignature readDBusSignature() {
-    if (remaining < 1) {
-      return null;
-    }
-    var length = readByte();
+  /// Reads a [DBusSignature] from the buffer.
+  Future<DBusSignature> readDBusSignature() async {
+    var length = await readByte();
     if (remaining < length + 1) {
       return null;
     }
@@ -293,74 +269,50 @@ class DBusReadBuffer extends DBusBuffer {
     return DBusSignature(utf8.decode(values));
   }
 
-  /// Reads a [DBusVariant] from the buffer or returns null if not enough data.
-  DBusVariant readDBusVariant() {
-    var signature = readDBusSignature();
-    if (signature == null) {
-      return null;
-    }
-
-    var childValue = readDBusValue(signature);
-    if (childValue == null) {
-      return null;
-    }
-
-    return DBusVariant(childValue);
+  /// Reads a [DBusVariant] from the buffer.
+  Future<DBusVariant> readDBusVariant() async {
+    var signature = await readDBusSignature();
+    return DBusVariant(await readDBusValue(signature));
   }
 
-  /// Reads a [DBusStruct] from the buffer or returns null if not enough data.
-  DBusStruct readDBusStruct(List<DBusSignature> childSignatures) {
-    if (!align(STRUCT_ALIGNMENT)) {
-      return null;
-    }
+  /// Reads a [DBusStruct] from the buffer.
+  Future<DBusStruct> readDBusStruct(List<DBusSignature> childSignatures) async {
+    await align(STRUCT_ALIGNMENT);
 
     var children = <DBusValue>[];
     for (var signature in childSignatures) {
-      var child = readDBusValue(signature);
-      if (child == null) {
-        return null;
-      }
-      children.add(child);
+      children.add(await readDBusValue(signature));
     }
 
     return DBusStruct(children);
   }
 
-  /// Reads a [DBusArray] from the buffer or returns null if not enough data.
-  DBusArray readDBusArray(DBusSignature childSignature) {
-    var length = readDBusUint32();
-    if (length == null || !align(getAlignment(childSignature))) {
-      return null;
-    }
+  /// Reads a [DBusArray] from the buffer.
+  Future<DBusArray> readDBusArray(DBusSignature childSignature) async {
+    var length = await readDBusUint32();
+    await align(getAlignment(childSignature));
 
+    /// FIXME(robert-ancell): Ensure we don't read off the end of the buffer.
     var end = readOffset + length.value;
     var children = <DBusValue>[];
     while (readOffset < end) {
-      var child = readDBusValue(childSignature);
-      if (child == null) {
-        return null;
-      }
-      children.add(child);
+      children.add(await readDBusValue(childSignature));
     }
 
     return DBusArray(childSignature, children);
   }
 
-  DBusDict readDBusDict(
-      DBusSignature keySignature, DBusSignature valueSignature) {
-    var length = readDBusUint32();
-    if (length == null || !align(DICT_ENTRY_ALIGNMENT)) {
-      return null;
-    }
+  Future<DBusDict> readDBusDict(
+      DBusSignature keySignature, DBusSignature valueSignature) async {
+    var length = await readDBusUint32();
+    await align(DICT_ENTRY_ALIGNMENT);
 
+    /// FIXME(robert-ancell): Ensure we don't read off the end of the buffer.
     var end = readOffset + length.value;
     var childSignatures = [keySignature, valueSignature];
     var children = <DBusValue, DBusValue>{};
     while (readOffset < end) {
-      var child = readDBusStruct(childSignatures);
-      if (child == null) {
-        return null;
-      }
+      var child = await readDBusStruct(childSignatures);
       var key = child.children.elementAt(0);
       var value = child.children.elementAt(1);
       children[key] = value;
@@ -370,7 +322,7 @@ class DBusReadBuffer extends DBusBuffer {
   }
 
   /// Reads a [DBusValue] with [signature].
-  DBusValue readDBusValue(DBusSignature signature) {
+  Future<DBusValue> readDBusValue(DBusSignature signature) async {
     var s = signature.value;
     if (s == 'y') {
       return readDBusByte();
@@ -416,7 +368,7 @@ class DBusReadBuffer extends DBusBuffer {
   }
 
   /// Skips data from the buffer to align to [boundary].
-  bool align(int boundary) {
+  Future align(int boundary) {
     while (readOffset % boundary != 0) {
       if (remaining == 0) {
         return false;
@@ -442,6 +394,6 @@ class DBusReadBuffer extends DBusBuffer {
         s += '\\' + d.toRadixString(8);
       }
     }
-    return "DBusReadBuffer('${s}')";
+    return "DBusDecoder('${s}')";
   }
 }

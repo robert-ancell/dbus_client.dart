@@ -54,7 +54,7 @@ class DBusSignalSubscription {
 class DBusClient {
   String _address;
   Socket _socket;
-  DBusReadBuffer _readBuffer;
+  DBusDecoder _decoder;
   final _authenticateCompleter = Completer();
   var _lastSerial = 0;
   final _methodCalls = <_MethodCall>[];
@@ -351,8 +351,7 @@ class DBusClient {
     var socket_address =
         InternetAddress(paths[0], type: InternetAddressType.unix);
     _socket = await Socket.connect(socket_address, 0);
-    _readBuffer = DBusReadBuffer();
-    _socket.listen(_processData);
+    _decoder = DBusDecoder(_socket);
 
     await _authenticate();
 
@@ -455,8 +454,6 @@ class DBusClient {
 
   /// Processes incoming data from the D-Bus server.
   void _processData(Uint8List data) {
-    _readBuffer.writeBytes(data);
-
     var complete = false;
     while (!complete) {
       if (!_authenticateCompleter.isCompleted) {
@@ -464,13 +461,13 @@ class DBusClient {
       } else {
         complete = _processMessages();
       }
-      _readBuffer.flush();
+      _decoder.flush();
     }
   }
 
   /// Processes authentication messages received from the D-Bus server.
   bool _processAuth() {
-    var line = _readBuffer.readLine();
+    var line = _decoder.readLine();
     if (line == null) {
       return true;
     }
@@ -487,10 +484,10 @@ class DBusClient {
 
   /// Processes messages (method calls/returns/errors/signals) received from the D-Bus server.
   bool _processMessages() {
-    var start = _readBuffer.readOffset;
-    var message = _readBuffer.readMessage();
+    var start = _decoder.readOffset;
+    var message = _decoder.readMessage();
     if (message == null) {
-      _readBuffer.readOffset = start;
+      _decoder.readOffset = start;
       return true;
     }
 

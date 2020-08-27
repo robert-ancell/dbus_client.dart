@@ -1,3 +1,4 @@
+import 'dbus_decoder.dart';
 import 'dbus_value.dart';
 
 /// Supported protocol version.

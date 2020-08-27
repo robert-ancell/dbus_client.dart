@@ -1,6 +1,6 @@
 import 'dbus_value.dart';
 
-/// Contains common functionality used in [DBusReadBuffer] and [DBusWriteBuffer].
+/// Contains common functionality used in [DBusDecoder] and [DBusWriteBuffer].
 class DBusBuffer {
   final int BYTE_ALIGNMENT = 1;
   final int BOOLEAN_ALIGNMENT = 4;
