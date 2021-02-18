@@ -3,6 +3,14 @@ import 'package:args/command_runner.dart';
 import 'package:dbus/dbus.dart';
 import 'package:dbus/src/dbus_dart_type.dart';
 
+class GenerateOptions {
+  String className;
+  final String input;
+  final String output;
+
+  GenerateOptions({this.className, this.input, this.output});
+}
+
 /// Command that generates a DBusObject class from an introspection XML file.
 class GenerateObjectCommand extends Command {
   @override
@@ -24,8 +32,11 @@ class GenerateObjectCommand extends Command {
       usageException(
           '${name} requires a single D-Bus interface file to be provided.');
     }
-    generateModule(name, argResults['class-name'], generateObjectClass,
-        argResults.rest[0], argResults['output']);
+    var options = GenerateOptions(
+        className: argResults['class-name'],
+        input: argResults.rest[0],
+        output: argResults['output']);
+    generateModule(name, options, generateObjectClass);
   }
 }
 
@@ -51,8 +62,11 @@ class GenerateRemoteObjectCommand extends Command {
       usageException(
           '${name} requires a single D-Bus interface file to be provided.');
     }
-    generateModule(name, argResults['class-name'], generateRemoteObjectClass,
-        argResults.rest[0], argResults['output']);
+    var options = GenerateOptions(
+        className: argResults['class-name'],
+        input: argResults.rest[0],
+        output: argResults['output']);
+    generateModule(name, options, generateRemoteObjectClass);
   }
 }
 
@@ -70,20 +84,19 @@ void main(List<String> args) async {
   });
 }
 
-/// Generates Dart source from the given interface in [filename] and writes it to [outputFilename].
+/// Generates Dart source.
 void generateModule(
     String command,
-    String className,
-    String Function(DBusIntrospectNode, String) generateClassFunction,
-    String interfaceFilename,
-    String outputFilename) async {
-  var xml = await File(interfaceFilename).readAsString();
+    GenerateOptions options,
+    String Function(DBusIntrospectNode, GenerateOptions)
+        generateClassFunction) async {
+  var xml = await File(options.input).readAsString();
   var node = parseDBusIntrospectXml(xml);
 
-  if (className == null) {
+  if (options.className == null) {
     // FIXME(robert-ancell) add --org-name to strip off prefixes?
-    className = nodeToClassName(node);
-    if (className == null) {
+    options.className = nodeToClassName(node);
+    if (options.className == null) {
       return;
     }
   }
@@ -91,17 +104,17 @@ void generateModule(
   var source = '';
   source +=
       '// This file was generated using the following command and may be overwritten.\n';
-  source += '// dart-dbus ${command} ${interfaceFilename}\n';
+  source += '// dart-dbus ${command} ${options.input}\n';
   source += '\n';
   source += "import 'package:dbus/dbus.dart';\n";
   source += '\n';
-  source += generateClassFunction(node, className);
+  source += generateClassFunction(node, options);
 
-  if (outputFilename == null || outputFilename == '-') {
+  if (options.output == null || options.output == '-') {
     print(source);
   } else {
-    await File(outputFilename).writeAsString(source);
-    print('Wrote to ${outputFilename}');
+    await File(options.output).writeAsString(source);
+    print('Wrote to ${options.output}');
   }
 }
 
@@ -115,7 +128,7 @@ String getUniqueMethodName(List<String> methodNames, String name) {
 }
 
 /// Generates a DBusObject class for the given introspection node.
-String generateObjectClass(DBusIntrospectNode node, String className) {
+String generateObjectClass(DBusIntrospectNode node, GenerateOptions options) {
   var methods = <String>[];
   // Method names provided in this class, initially populated with DBusObject methods.
   // Needs to be kept in sync with the DBusObject class.
@@ -148,7 +161,7 @@ String generateObjectClass(DBusIntrospectNode node, String className) {
   methods.add(generateGetAllProperties(node));
 
   var source = '';
-  source += 'class ${className} extends DBusObject {\n';
+  source += 'class ${options.className} extends DBusObject {\n';
   source += methods.join('\n');
   source += '}\n';
 
@@ -556,7 +569,8 @@ String generateGetAllProperties(DBusIntrospectNode node) {
 }
 
 /// Generates a DBusRemoteObject class for the given introspection node.
-String generateRemoteObjectClass(DBusIntrospectNode node, String className) {
+String generateRemoteObjectClass(
+    DBusIntrospectNode node, GenerateOptions options) {
   var classes = <String>[];
   var methods = <String>[];
   // Method names provided in this class, initially populated with DBusRemoteObject methods.
@@ -582,9 +596,10 @@ String generateRemoteObjectClass(DBusIntrospectNode node, String className) {
     }
 
     for (var signal in interface.signals) {
-      classes.add(generateRemoteSignalClass(className, interface, signal));
+      classes
+          .add(generateRemoteSignalClass(options.className, interface, signal));
       methods.add(generateRemoteSignalSubscription(
-          methodNames, className, interface, signal));
+          methodNames, options.className, interface, signal));
     }
   }
 
@@ -597,9 +612,9 @@ String generateRemoteObjectClass(DBusIntrospectNode node, String className) {
   }
 
   var source = '';
-  source += 'class ${className} extends DBusRemoteObject {\n';
+  source += 'class ${options.className} extends DBusRemoteObject {\n';
   source +=
-      '''  ${className}(DBusClient client, String destination, ${pathArg}) : super(client, destination, path);\n''';
+      '''  ${options.className}(DBusClient client, String destination, ${pathArg}) : super(client, destination, path);\n''';
   source += '\n';
   source += methods.join('\n');
   source += '}\n';
