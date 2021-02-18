@@ -7,8 +7,10 @@ class GenerateOptions {
   String className;
   final String input;
   final String output;
+  final bool cacheProperties;
 
-  GenerateOptions({this.className, this.input, this.output});
+  GenerateOptions(
+      {this.className, this.input, this.output, this.cacheProperties = false});
 }
 
 /// Command that generates a DBusObject class from an introspection XML file.
@@ -54,6 +56,8 @@ class GenerateRemoteObjectCommand extends Command {
         abbr: 'o', valueHelp: 'filename', help: 'Dart file to write to');
     argParser.addOption('class-name',
         valueHelp: 'ClassName', help: 'Class name to use');
+    argParser.addFlag('cache-properties',
+        negatable: false, help: 'Cache remote properties in object');
   }
 
   @override
@@ -64,6 +68,7 @@ class GenerateRemoteObjectCommand extends Command {
     }
     var options = GenerateOptions(
         className: argResults['class-name'],
+        cacheProperties: argResults['cache-properties'],
         input: argResults.rest[0],
         output: argResults['output']);
     generateModule(name, options, generateRemoteObjectClass);
@@ -585,10 +590,23 @@ String generateRemoteObjectClass(
     'subscribeSignal'
   ];
 
+  if (options.cacheProperties) {
+    methods.add(generateRemoteConnectMethod(methodNames, node.interfaces));
+    methods.add(generateRemoteCloseMethod(methodNames, node.interfaces));
+    for (var interface in node.interfaces) {
+      methods.add(generateUpdatePropertiesMethod(methodNames, interface));
+    }
+  }
+
   for (var interface in node.interfaces) {
     for (var property in interface.properties) {
-      methods.addAll(
-          generateRemotePropertyMethods(methodNames, interface, property));
+      if (options.cacheProperties) {
+        methods.addAll(generateRemotePropertyGetterAndSetter(
+            methodNames, interface, property));
+      } else {
+        methods.addAll(
+            generateRemotePropertyMethods(methodNames, interface, property));
+      }
     }
 
     for (var method in interface.methods) {
@@ -616,11 +634,79 @@ String generateRemoteObjectClass(
   source +=
       '''  ${options.className}(DBusClient client, String destination, ${pathArg}) : super(client, destination, path);\n''';
   source += '\n';
+  if (options.cacheProperties) {
+    source += '  // Caches property values. \n';
+    source += '  final _properties = <String, DBusValue>{};\n';
+    source += '\n';
+  }
   source += methods.join('\n');
   source += '}\n';
   classes.add(source);
 
   return classes.join('\n');
+}
+
+/// Generate a method to get all the properties
+String generateRemoteConnectMethod(
+    List<String> methodNames, List<DBusIntrospectInterface> interfaces) {
+  var source = '';
+  source +=
+      '  /// Connect to the D-Bus daemon and get property values for this object\n';
+  source += '  Future<void> connect() async {\n';
+  for (var interface in interfaces) {
+    source +=
+        "    _updateProperties(await getAllProperties('${interface.name}'));\n";
+  }
+  source += '  }\n';
+  methodNames.add('connect');
+
+  return source;
+}
+
+/// Generate a method to close the connection to the D-Bus daemon.
+String generateRemoteCloseMethod(
+    List<String> methodNames, List<DBusIntrospectInterface> interfaces) {
+  var source = '';
+  source +=
+      '  /// Terminates the connection to the D-Bus daemon. If a client remains unclosed, the Dart process may not terminate.\n';
+  source += '  void close() {\n';
+  source += '  }\n';
+  methodNames.add('close');
+
+  return source;
+}
+
+/// Generate a method to process updated properties.
+String generateUpdatePropertiesMethod(
+    List<String> methodNames, DBusIntrospectInterface interface) {
+  var source = '';
+  return source;
+}
+
+/// Generate getter and setter for the remote [property].
+List<String> generateRemotePropertyGetterAndSetter(List<String> methodNames,
+    DBusIntrospectInterface interface, DBusIntrospectProperty property) {
+  var methods = <String>[];
+
+  var type = getDartType(property.type);
+
+  if (property.access == DBusPropertyAccess.readwrite ||
+      property.access == DBusPropertyAccess.read) {
+    var methodName = getUniqueMethodName(methodNames, property.name);
+
+    var convertedValue = type.dbusToNative("_properties['${property.name}']");
+    var source = '';
+    source += '  /// Gets ${interface.name}.${property.name}\n';
+    source += '  ${type.nativeType} get ${methodName} => ${convertedValue};\n';
+    methods.add(source);
+  }
+
+  if (property.access == DBusPropertyAccess.readwrite ||
+      property.access == DBusPropertyAccess.write) {
+    // FIXME
+  }
+
+  return methods;
 }
 
 /// Generate methods for the remote [property].
