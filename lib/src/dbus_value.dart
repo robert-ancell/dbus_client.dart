@@ -676,6 +676,83 @@ class DBusArray extends DBusValue {
   /// Ordered list of children in this array.
   final List<DBusValue> children;
 
+  Iterable<int> get byteChildren {
+    if (childSignature != DBusSignature('y')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusByte).value);
+  }
+
+  Iterable<int> get int16Children {
+    if (childSignature != DBusSignature('n')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusInt16).value);
+  }
+
+  Iterable<int> get uint16Children {
+    if (childSignature != DBusSignature('q')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusUint16).value);
+  }
+
+  Iterable<int> get int32Children {
+    if (childSignature != DBusSignature('i')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusInt32).value);
+  }
+
+  Iterable<int> get uint32Children {
+    if (childSignature != DBusSignature('u')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusUint32).value);
+  }
+
+  Iterable<int> get int64Children {
+    if (childSignature != DBusSignature('x')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusInt64).value);
+  }
+
+  Iterable<int> get uint64Children {
+    if (childSignature != DBusSignature('t')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusUint64).value);
+  }
+
+  Iterable<double> get doubleChildren {
+    if (childSignature != DBusSignature('d')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusDouble).value);
+  }
+
+  Iterable<String> get stringChildren {
+    if (childSignature != DBusSignature('s')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusString).value);
+  }
+
+  Iterable<DBusObjectPath> get objectPathChildren {
+    if (childSignature != DBusSignature('o')) {
+      throw '';
+    }
+    return children.map((value) => value as DBusObjectPath);
+  }
+
+  Iterable<DBusValue> get variantChildren {
+    if (childSignature != DBusSignature('v')) {
+      throw '';
+    }
+    return children.map((value) => (value as DBusVariant).value);
+  }
+
   /// Creates a new empty D-Bus array containing [children].
   ///
   /// [childSignature] must contain a single type.
